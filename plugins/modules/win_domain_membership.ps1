@@ -101,15 +101,13 @@ Function Join-Domain {
         [string] $new_hostname,
         [string] $domain_admin_user,
         [string] $domain_admin_password,
-        [string] $domain_ou_path
+        [string] $domain_ou_path,
+        [bool] $unsecure_join,
+        [string] $unsecure_password
     )
-
-    Write-DebugLog ("Creating credential for user {0}" -f $domain_admin_user)
-    $domain_cred = New-Credential $domain_admin_user $domain_admin_password
 
     $add_args = @{
         ComputerName = "."
-        Credential = $domain_cred
         DomainName = $dns_domain_name
         Force = $null
     }
@@ -119,6 +117,22 @@ Function Join-Domain {
         $add_args["NewName"] = $new_hostname
     }
 
+    If($unsecure_join) {
+        If(-not($unsecure_password)) {
+            # Default unsecure password is the 14 first characters of the hostname in lowercase
+            $hostname = If($new_hostname) { $new_hostname } else { $env:computername }
+            $unsecure_password = $hostname.ToLower().SubString(0,[Math]::min(14, $hostname.length))
+        }
+        # PSCredential constructor has to be tricked to accept a $null username
+        $add_args["Credential"] = New-Object System.Management.Automation.PSCredential -ArgumentList ([PSCustomObject]@{
+            UserName = $null
+            Password = (ConvertTo-SecureString -String $unsecure_password -AsPlainText -Force)[0]
+        })
+        $add_args["Options"] = "UnsecuredJoin"
+    } else {
+        Write-DebugLog ("Creating credential for user {0}" -f $domain_admin_user)
+        $add_args["Credential"] = New-Credential $domain_admin_user $domain_admin_password
+    }
 
     if ($domain_ou_path) {
         Write-DebugLog "adding OU destination arg to Add-Computer args"
@@ -197,8 +211,10 @@ $state = Get-AnsibleParam $params "state" -validateset @("domain", "workgroup") 
 $dns_domain_name = Get-AnsibleParam $params "dns_domain_name"
 $hostname = Get-AnsibleParam $params "hostname"
 $workgroup_name = Get-AnsibleParam $params "workgroup_name"
-$domain_admin_user = Get-AnsibleParam $params "domain_admin_user" -failifempty $result
-$domain_admin_password = Get-AnsibleParam $params "domain_admin_password" -failifempty $result
+$unsecure_join = Get-AnsibleParam $params "unsecure_join" -default $false
+$unsecure_password = Get-AnsibleParam $params "unsecure_password"
+$domain_admin_user = Get-AnsibleParam $params "domain_admin_user" -failifempty:(!$unsecure_join) $result
+$domain_admin_password = Get-AnsibleParam $params "domain_admin_password" -failifempty:(!$unsecure_join) $result
 $domain_ou_path = Get-AnsibleParam $params "domain_ou_path"
 
 $log_path = Get-AnsibleParam $params "log_path"
@@ -241,6 +257,8 @@ Try {
                         dns_domain_name = $dns_domain_name
                         domain_admin_user = $domain_admin_user
                         domain_admin_password = $domain_admin_password
+                        unsecure_join = $unsecure_join
+                        unsecure_password = $unsecure_password
                     }
 
                     Write-DebugLog "not a domain member, joining..."
