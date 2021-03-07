@@ -18,11 +18,12 @@ options:
   domain_admin_user:
     description:
       - Username of a domain admin for the target domain (required to join or leave the domain).
+      - Required unless C(unsecure_join) is true.
     type: str
-    required: yes
   domain_admin_password:
     description:
       - Password for the specified C(domain_admin_user).
+      - Required unless C(unsecure_join) is true.
     type: str
   hostname:
     description:
@@ -41,6 +42,14 @@ options:
   workgroup_name:
     description:
       - When C(state) is C(workgroup), the name of the workgroup that the Windows host should be in.
+    type: str
+  unsecure_join:
+    description:
+      - Use unsecure join.
+    type: bool
+  unsecure_password:
+    description:
+      - One-time-password to use for unsecure join.
     type: str
 seealso:
 - module: ansible.windows.win_domain
