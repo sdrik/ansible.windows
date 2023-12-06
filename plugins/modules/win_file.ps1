@@ -12,6 +12,7 @@ $params = Parse-Args $args -supports_check_mode $true
 
 $check_mode = Get-AnsibleParam -obj $params -name "_ansible_check_mode" -default $false
 $_remote_tmp = Get-AnsibleParam $params "_ansible_remote_tmp" -type "path" -default $env:TMP
+$_diff_peek = Get-AnsibleParam $params "_diff_peek" -type "bool" -default $false
 
 $path = Get-AnsibleParam -obj $params -name "path" -type "path" -failifempty $true -aliases "dest", "name"
 $state = Get-AnsibleParam -obj $params -name "state" -type "str" -validateset "absent", "directory", "file", "touch"
@@ -89,6 +90,21 @@ function Remove-Directory($directory, $checkmode) {
     Remove-Item -LiteralPath $directory.FullName -Force -Recurse -WhatIf:$checkmode
 }
 
+
+if ($_diff_peek) {
+    if (Test-Path -LiteralPath $path) {
+        if ($fileinfo.PsIsContainer) {
+            $result.state = 'directory'
+        }
+        else {
+            $result.state = 'file'
+        }
+    }
+    else {
+        $result.state = 'absent'
+    }
+    Exit-Json $result
+}
 
 if ($state -eq "touch") {
     if (Test-Path -LiteralPath $path) {
